@@ -9,6 +9,7 @@
   <link rel="stylesheet" href="app.css">
   <script defer src="data/miura-network.js"></script>
   <script defer src="routing.js"></script>
+  <script defer src="streetview.js"></script>
   <script defer src="app.js"></script>
 </head>
 <body>
@@ -33,7 +34,7 @@
           <button class="button primary generate" id="generateButton" type="submit"><span>↗</span> コマ地図を自動生成</button>
         </form>
         <div id="status" role="status" aria-live="polite" class="status">道路データを読み込んでいます…</div>
-        <details class="data-details"><summary>地図データについて</summary><p>経路・交差点・標識はOpenStreetMapの登録データを使用します。Google マップは現地確認用です。</p><p id="dataInfo"></p><p>標識の未登録は「標識がない」という意味ではありません。地図に存在が登録されている標識だけを表示します。</p><button class="text-button" id="refreshData" type="button">公開データを再取得</button></details>
+        <details class="data-details"><summary>地図データについて</summary><p>経路・交差点・標識はOpenStreetMapの登録データを使用します。Google マップは現地確認用です。</p><p id="dataInfo"></p><p><a href="streetview.html" target="_blank" rel="noopener">OSM登録済みの目印の画像を確認 ↗</a></p><p>標識の未登録は「標識がない」という意味ではありません。地図に存在が登録されている標識だけを表示します。</p><button class="text-button" id="refreshData" type="button">公開データを再取得</button></details>
       </section>
       <section class="map-panel panel" aria-labelledby="mapTitle">
         <div class="panel-toolbar"><h2 id="mapTitle">コース全体図 <small>作成者用</small></h2><a class="map-link" id="googleLink" target="_blank" rel="noreferrer">Google マップで確認 ↗</a></div>
@@ -55,7 +56,7 @@
       <div id="checkpointAside" class="checkpoint-aside"></div>
       <div class="print-footer">道の線は道路の中心線です。進入方向は下、黒い矢印は進行方向。方角・距離・道幅は一定ではありません。<br>© OpenStreetMap contributors · <span id="printSource"></span></div>
     </section>
-    <footer>Google マップ上の経路と、自動生成した経路は異なる場合があります。印刷前に全体図と現地の道路・目印を確認してください。<br><a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap / ODbL</a> · 添付された歩行ラリーのルールを参考にしています。</footer>
+    <footer>Google マップ上の経路と、自動生成した経路は異なる場合があります。印刷前に全体図と現地の道路・目印を確認してください。<br><a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap / ODbL</a> · <a href="terms.html" target="_blank" rel="noreferrer">利用条件</a> · <a href="privacy.html" target="_blank" rel="noreferrer">プライバシー</a><br>添付された歩行ラリーのルールを参考にしています。</footer>
   </main>
   <dialog id="frameDialog"><form id="frameEditForm"><div class="dialog-heading"><h2 id="editTitle">コマの確認</h2><button class="icon-button" type="button" id="closeDialog" aria-label="閉じる">×</button></div><div id="editDiagram"></div><a id="streetViewLink" target="_blank" rel="noreferrer">この地点をGoogle ストリートビューで確認 ↗</a><label class="field-label" for="manualLandmark">現地・Google マップで確認した目印</label><input id="manualLandmark" placeholder="例：交差点の左にある青い案内看板" maxlength="100"><div class="option-grid"><div><label class="field-label" for="manualSign">追加する道路標識</label><select id="manualSign"><option value="">追加しない</option><option value="stop">一時停止</option><option value="signals">信号機</option><option value="other">その他の標識</option></select></div><div><label class="field-label" for="signSide">標識の位置（進行方向基準）</label><select id="signSide"><option value="left">左</option><option value="right">右</option></select></div></div><label class="field-label" for="manualSignLabel">標識名・表示内容</label><input id="manualSignLabel" maxlength="60" placeholder="その他の標識の内容"><label class="field-label" for="frameNote">コマに印刷する補足</label><input id="frameNote" maxlength="120" placeholder="例：砂利道へ入る"><div class="dialog-actions"><button type="button" class="button" id="clearEdit">手動追記を解除</button><button type="submit" class="button primary">追記を保存</button></div><p class="small-muted">自動取得した標識は残し、確認した内容を追記します。</p></form></dialog>
   <input type="file" id="fileInput" accept="application/json,.json" hidden>

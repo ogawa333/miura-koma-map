@@ -3,6 +3,7 @@
   const $ = id => document.getElementById(id);
   const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const ENGINE = window.KomaRouting, STORAGE = 'miura-komachizu-v2';
+  const photoRegistry=window.KomaStreetView?window.KomaStreetView.registry(window.MIURA_NETWORK||{},ENGINE):new Map();
   let data = window.MIURA_NETWORK, result = null, edits = {}, locations = [], searchPlaces = [], pickIndex = null, editingFrame = null, toastTimer;
   let view = null, base = null, mapDrag = null, dirty = false, legacyResult = null;
   const typeLabels = {start:'START',goal:'GOAL',via:'経由地',junction:'交差点',bend:'曲がり角',continue:'道なり'};
@@ -118,6 +119,12 @@
     map.addEventListener('pointerup',event=>{if(!mapDrag||event.pointerId!==mapDrag.pointer)return;const drag=mapDrag;mapDrag=null;if(drag.moved){drawMap();return;}if(pickIndex===null)return;const p=unprojected(localPoint(event));if(!inBounds(p)){notify('対応範囲内の道路を選んでください');return;}const i=pickIndex;locations[i]={...locations[i],name:`地図で指定 (${p.lat.toFixed(5)}, ${p.lon.toFixed(5)})`,...p};pickIndex=null;renderLocations();updatePickHint();drawMap();invalidate();});
     map.addEventListener('pointercancel',()=>{mapDrag=null;});map.addEventListener('wheel',event=>{if(event.ctrlKey||event.metaKey){event.preventDefault();zoom(event.deltaY>0?1.12:.89);}},{passive:false});
   }
+  function photoLink(kind,item){
+    if(!window.KomaStreetView||item.source!=='OpenStreetMap')return '';
+    const id=kind==='landmark'?String(item.id||''):'n'+String(item.osmId||'');
+    const url=window.KomaStreetView.viewerURL(photoRegistry,kind,id);
+    return url?`<a class="photo-link organizer-only" href="${esc(url)}" target="_blank" rel="noopener" aria-label="${esc(item.name||item.label||'目印')}のStreet View画像">画像 ↗</a>`:'';
+  }
   function frameEdit(f){return edits[f.id]||{};}
   function frameSigns(f){const e=frameEdit(f);return e.signKind?[...f.signs,{kind:e.signKind,label:e.signLabel||(e.signKind==='stop'?'一時停止':e.signKind==='signals'?'信号機':'道路標識'),source:'手動確認',side:e.signSide||'left'}]:f.signs;}
   function frameLandmarks(f){const all=[...(f.landmarks||(f.landmark?[f.landmark]:[]))],manual=frameEdit(f).landmark;if(manual)all.push({name:manual,kind:'building',category:'手動確認',source:'手動確認'});return all;}
@@ -172,7 +179,7 @@
     $('coverageNotice').textContent=missing?`△ ${groups.length}組中${missing}組で「3コマに1つ」の目印が未確認です。看板・目印は交差点から40m以内の登録データを表示します。見える位置や表示内容は「確認・追記」で確認してください。`:`✓ 交差点付近の看板・地域の目印を${landmarks}件、道路標識・信号を${signs}件表示しています。位置は概略です。`;
     $('frameGrid').innerHTML=result.frames.length?result.frames.map(f=>{
       const marks=frameSigns(f),features=frameLandmarks(f),e=frameEdit(f),cps=f.checkpoints||[],tag=cps.length?cps.map(cp=>'CP '+cp.number).join(' / '):features.length?'目印あり':marks.length?'標識あり':'交差点';
-      return `<article class="koma ${cps.length?'checkpoint-koma':''}" id="frame${f.number}"><div class="koma-head"><span class="koma-number">${String(f.number).padStart(3,'0')}</span><span class="type ${features.length||marks.length||cps.length?'marker':''}">${esc(tag)}</span></div>${diagram(f,'card'+f.number)}${cps.map(cp=>checkpointHTML(cp)).join('')}<div class="koma-body"><div class="koma-direction">${esc(f.label)}</div>${marks.length?`<div class="koma-sign">${marks.map(s=>`<span class="sign-chip">${esc(s.label)}${s.code?' '+esc(s.code):''}</span>`).join('')}</div>`:''}${features.map((l,i)=>`<div class="koma-note landmark-note"><b>${i<4?i+1:'◇'}</b><span>${esc(l.name)}<small>${esc(l.category||'確認した目印')}</small></span></div>`).join('')}${e.note?`<div class="koma-note">${esc(e.note)}</div>`:''}</div><div class="koma-info"><span>${Math.round(f.at)} m 地点${!marks.length?' · 標識未確認':''}</span><button data-edit="${f.number-1}">確認・追記 ↗</button></div></article>`;
+      return `<article class="koma ${cps.length?'checkpoint-koma':''}" id="frame${f.number}"><div class="koma-head"><span class="koma-number">${String(f.number).padStart(3,'0')}</span><span class="type ${features.length||marks.length||cps.length?'marker':''}">${esc(tag)}</span></div>${diagram(f,'card'+f.number)}${cps.map(cp=>checkpointHTML(cp)).join('')}<div class="koma-body"><div class="koma-direction">${esc(f.label)}</div>${marks.length?`<div class="koma-sign">${marks.map(s=>`<span class="sign-chip">${esc(s.label)}${s.code?' '+esc(s.code):''}${photoLink('sign',s)}</span>`).join('')}</div>`:''}${features.map((l,i)=>`<div class="koma-note landmark-note"><b>${i<4?i+1:'◇'}</b><span>${esc(l.name)}<small>${esc(l.category||'確認した目印')}</small></span>${photoLink('landmark',l)}</div>`).join('')}${e.note?`<div class="koma-note">${esc(e.note)}</div>`:''}</div><div class="koma-info"><span>${Math.round(f.at)} m 地点${!marks.length?' · 標識未確認':''}</span><button data-edit="${f.number-1}">確認・追記 ↗</button></div></article>`;
     }).join(''):'<div class="empty-state"><span>→</span><h3>この経路上に交差点はありません</h3><p>直線やカーブのコマは作成しません。<br>スタートから経路に沿ってゴールへ進みます。</p></div>';
     $('checkpointAside').innerHTML=(result.unassignedCheckpoints||[]).map(cp=>checkpointHTML(cp)).join('');
     $('printSource').textContent=`道路データ取得日：${formatDate(result.sourceDate||data.timestamp)} · 目印の記号：▤ 看板 / ⛩ 寺社 / □ 建物・史跡`;
