@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#f5f2e9">
+  <meta name="description" content="出発地と目的地から、歩行ラリーのコマ地図を自動生成。交差点の形、進行方向、登録済みの道路標識を図にします。">
+  <title>三浦港 コマ地図メーカー</title>
+  <link rel="stylesheet" href="app.css">
+  <script defer src="data/miura-network.js"></script>
+  <script defer src="routing.js"></script>
+  <script defer src="app.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="#"><span class="brand-mark">↗</span><span>コマ地図メーカー<small>MIURA PORT · WALK RALLY</small></span></a>
+    <div class="top-actions"><span id="saveState" class="save-state">ブラウザに自動保存</span><button class="button" id="importButton">読み込む</button><button class="button" id="downloadButton">データ保存</button><button class="button primary" id="printButton">▤　印刷 / PDF</button></div>
+  </header>
+  <main class="shell">
+    <div class="heading"><div><div class="eyebrow">ROUTE → TULIP ROADBOOK</div><h1>道のつながりを、ひとコマずつ。</h1><p>スタート・ゴールを設定すると、実際の道路の形からコマ地図を自動でつくります。</p></div><span class="area-chip">●　三浦市・三崎港周辺</span></div>
+    <div class="workspace">
+      <section class="planner panel" aria-labelledby="plannerTitle">
+        <div class="section-heading"><h2 id="plannerTitle">コースを設定</h2><span class="mini-label">01 / PLAN</span></div>
+        <form id="routeForm">
+          <label class="field-label" for="routeName">コース名</label><input id="routeName" value="三浦港まち歩き" maxlength="80">
+          <div class="location-fields" id="locationFields"></div>
+          <datalist id="placeList"></datalist>
+          <button class="text-button" id="addVia" type="button">＋ 経由地を追加</button>
+          <button class="text-button checkpoint-add" id="addCheckpoint" type="button">⚑ チェックポイントを追加</button>
+          <p class="checkpoint-hint">神社などをCPに指定してミッションを入力すると、その場所を通る経路とミッション付きのコマ地図を作ります。</p>
+          <div class="generation-rule">交差点ごとに生成します。直線・カーブでの分割はしません。<br>交差点以外のCPのミッションは、手前の交差点のコマに載せます。</div>
+          <label class="checkbox"><input type="checkbox" id="autoLandmarks" checked>看板・三浦の特徴的な目印も自動追加</label>
+          <button class="button primary generate" id="generateButton" type="submit"><span>↗</span> コマ地図を自動生成</button>
+        </form>
+        <div id="status" role="status" aria-live="polite" class="status">道路データを読み込んでいます…</div>
+        <details class="data-details"><summary>地図データについて</summary><p>経路・交差点・標識はOpenStreetMapの登録データを使用します。Google マップは現地確認用です。</p><p id="dataInfo"></p><p>標識の未登録は「標識がない」という意味ではありません。地図に存在が登録されている標識だけを表示します。</p><button class="text-button" id="refreshData" type="button">公開データを再取得</button></details>
+      </section>
+      <section class="map-panel panel" aria-labelledby="mapTitle">
+        <div class="panel-toolbar"><h2 id="mapTitle">コース全体図 <small>作成者用</small></h2><a class="map-link" id="googleLink" target="_blank" rel="noreferrer">Google マップで確認 ↗</a></div>
+        <div class="map-stage" id="mapStage">
+          <svg id="areaMap" role="img" aria-label="三浦港周辺の道路図。地点指定モードでクリックすると出発地や目的地を設定できます。" viewBox="0 0 900 440"><rect width="900" height="440" fill="#e9ece2"/><text x="450" y="220" text-anchor="middle" fill="#6b786c">道路データを読み込んでいます…</text></svg>
+          <div class="map-controls"><button id="zoomIn" aria-label="拡大">＋</button><button id="zoomOut" aria-label="縮小">−</button><button id="fitMap" aria-label="コース全体を表示">⌗</button></div>
+          <div class="map-pick-hint" id="mapPickHint">ドラッグで移動 · ＋ / − で拡大縮小</div>
+          <div class="map-credit"><a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">© OpenStreetMap contributors</a></div>
+        </div>
+        <div class="map-bottom"><div class="legend"><span><i class="dot start-dot"></i>スタート</span><span><i class="dot via-dot"></i>経由地</span><span><i class="dot goal-dot"></i>ゴール</span></div><span id="snapInfo">入力欄の ⌖ で地図から地点を指定</span></div>
+      </section>
+    </div>
+    <section class="roadbook" aria-labelledby="bookTitle">
+      <div class="book-heading"><div><div class="eyebrow">02 / ROADBOOK</div><h2 id="bookTitle">コマ地図</h2><p id="bookSubtitle">進入方向は下。黒い矢印の方向へ進みます。</p></div><div class="book-tools"><label class="checkbox"><input type="checkbox" id="organizerMode" checked>作成者表示</label><button class="button" id="sampleButton">三浦港コース例</button></div></div>
+      <p id="routeEnds" class="route-ends"></p>
+      <div class="metrics" id="metrics" hidden></div>
+      <div id="coverageNotice" class="coverage-notice" hidden></div>
+      <div id="frameGrid" class="frame-grid"><div class="empty-state"><span>↱</span><h3>スタートとゴールを選んでください</h3><p>地名を選ぶか、地図上の道路を指定。<br>交差点だけが、番号順のコマ地図になります。</p></div></div>
+      <div id="checkpointAside" class="checkpoint-aside"></div>
+      <div class="print-footer">道の線は道路の中心線です。進入方向は下、黒い矢印は進行方向。方角・距離・道幅は一定ではありません。<br>© OpenStreetMap contributors · <span id="printSource"></span></div>
+    </section>
+    <footer>Google マップ上の経路と、自動生成した経路は異なる場合があります。印刷前に全体図と現地の道路・目印を確認してください。<br><a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap / ODbL</a> · 添付された歩行ラリーのルールを参考にしています。</footer>
+  </main>
+  <dialog id="frameDialog"><form id="frameEditForm"><div class="dialog-heading"><h2 id="editTitle">コマの確認</h2><button class="icon-button" type="button" id="closeDialog" aria-label="閉じる">×</button></div><div id="editDiagram"></div><a id="streetViewLink" target="_blank" rel="noreferrer">この地点をGoogle ストリートビューで確認 ↗</a><label class="field-label" for="manualLandmark">現地・Google マップで確認した目印</label><input id="manualLandmark" placeholder="例：交差点の左にある青い案内看板" maxlength="100"><div class="option-grid"><div><label class="field-label" for="manualSign">追加する道路標識</label><select id="manualSign"><option value="">追加しない</option><option value="stop">一時停止</option><option value="signals">信号機</option><option value="other">その他の標識</option></select></div><div><label class="field-label" for="signSide">標識の位置（進行方向基準）</label><select id="signSide"><option value="left">左</option><option value="right">右</option></select></div></div><label class="field-label" for="manualSignLabel">標識名・表示内容</label><input id="manualSignLabel" maxlength="60" placeholder="その他の標識の内容"><label class="field-label" for="frameNote">コマに印刷する補足</label><input id="frameNote" maxlength="120" placeholder="例：砂利道へ入る"><div class="dialog-actions"><button type="button" class="button" id="clearEdit">手動追記を解除</button><button type="submit" class="button primary">追記を保存</button></div><p class="small-muted">自動取得した標識は残し、確認した内容を追記します。</p></form></dialog>
+  <input type="file" id="fileInput" accept="application/json,.json" hidden>
+  <div id="toast" class="toast" role="status"></div>
+</body>
+</html>
