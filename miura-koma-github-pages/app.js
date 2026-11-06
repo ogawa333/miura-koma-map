@@ -5,6 +5,7 @@
   const ENGINE = window.KomaRouting, STORAGE = 'miura-komachizu-v2';
   const photoRegistry=window.KomaStreetView?window.KomaStreetView.registry(window.MIURA_NETWORK||{},ENGINE):new Map();
   let data = window.MIURA_NETWORK, result = null, edits = {}, locations = [], searchPlaces = [], pickIndex = null, editingFrame = null, toastTimer;
+  let draftImages = {}, imageLoad = 0;
   let view = null, base = null, mapDrag = null, dirty = false, legacyResult = null;
   const typeLabels = {start:'START',goal:'GOAL',via:'経由地',junction:'交差点',bend:'曲がり角',continue:'道なり'};
   function notify(message) { $('toast').textContent = message; $('toast').classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => $('toast').classList.remove('show'), 3000); }
@@ -129,6 +130,52 @@
   function frameSigns(f){const e=frameEdit(f);return e.signKind?[...f.signs,{kind:e.signKind,label:e.signLabel||(e.signKind==='stop'?'一時停止':e.signKind==='signals'?'信号機':'道路標識'),source:'手動確認',side:e.signSide||'left'}]:f.signs;}
   function frameLandmarks(f){const all=[...(f.landmarks||(f.landmark?[f.landmark]:[]))],manual=frameEdit(f).landmark;if(manual)all.push({name:manual,kind:'building',category:'手動確認',source:'手動確認'});return all;}
   function frameLandmark(f){return frameLandmarks(f)[0]||null;}
+  function imageKey(kind,item,index) {return kind+':'+(item.id||item.osmId||'manual-'+index);}
+  function safeImage(value) {return typeof value==='string'&&value.length<400000&&/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(value);}
+  function imageSymbol(f,kind,item,index) {
+    const images=editingFrame===f&&$('frameDialog').open?draftImages:frameEdit(f).images;
+    const src=images?.[imageKey(kind,item,index)];
+    return safeImage(src)?`<rect x="-22" y="-17" width="44" height="34" fill="white"/><image class="manual-photo" href="${esc(src)}" x="-22" y="-17" width="44" height="34" preserveAspectRatio="xMidYMid meet"/>`:'';
+  }
+  function imageTargets() {
+    return [...frameLandmarks(editingFrame).slice(0,4).map((item,i)=>({key:imageKey('landmark',item,i),label:`目印 ${i+1}：${item.name}`})),...frameSigns(editingFrame).map((item,i)=>({key:imageKey('sign',item,i),label:`標識 ${i+1}：${item.label}`}))];
+  }
+  function refreshImageEditor() {
+    const previous=$('imageTarget').value,targets=imageTargets();
+    $('imageTarget').innerHTML=targets.map(t=>`<option value="${esc(t.key)}">${esc(t.label)}</option>`).join('');
+    if(targets.some(t=>t.key===previous))$('imageTarget').value=previous;
+    $('manualPhoto').disabled=!targets.length;
+    $('imageHelp').textContent=targets.length?'差し替える目印・標識を選び、画像を追加してください。画像は保存・印刷に含まれます。':'このコマには目印・標識がありません。目印や標識を追記して保存し、もう一度開いてください。';
+    previewImage();
+  }
+  function previewImage() {
+    const src=draftImages[$('imageTarget').value];
+    $('photoPreview').hidden=!safeImage(src);
+    if(safeImage(src))$('photoPreview').src=src;else $('photoPreview').removeAttribute('src');
+    $('removePhoto').disabled=!safeImage(src);
+    $('editDiagram').innerHTML=diagram(editingFrame,'dialog');
+  }
+  async function loadManualPhoto(event) {
+    const file=event.target.files[0],frame=editingFrame,key=$('imageTarget').value,request=++imageLoad;
+    event.target.value='';
+    if(!file||!key)return;
+    if(!['image/jpeg','image/png','image/webp'].includes(file.type)||file.size>10*1024*1024){notify('JPEG・PNG・WebPの画像（10MB以下）を選んでください。');return;}
+    $('photoStatus').textContent='画像を読み込んでいます…';
+    $('saveFrame').disabled=true;
+    try {
+      const image=await createImageBitmap(file);
+      try {
+        const ratio=Math.min(1,480/Math.max(image.width,image.height)),canvas=document.createElement('canvas');
+        canvas.width=Math.max(1,Math.round(image.width*ratio));canvas.height=Math.max(1,Math.round(image.height*ratio));
+        const context=canvas.getContext('2d');context.fillStyle='white';context.fillRect(0,0,canvas.width,canvas.height);context.drawImage(image,0,0,canvas.width,canvas.height);
+        const src=canvas.toDataURL('image/jpeg',.8);
+        if(!safeImage(src))throw new Error('画像が大きすぎます。別の画像を選んでください。');
+        if(request!==imageLoad||editingFrame!==frame||!$('frameDialog').open)return;
+        draftImages[key]=src;previewImage();$('photoStatus').textContent='画像を追加しました。「追記を保存」で確定します。';
+      }finally{image.close();}
+    }catch(error){if(request===imageLoad){$('photoStatus').textContent='画像を読み込めませんでした。';notify(error.message);}}
+    finally{if(request===imageLoad)$('saveFrame').disabled=false;}
+  }
   function diagram(f, unique) {
     const heading=f.heading, center=f.center, cos=Math.cos(center.lat*Math.PI/180), scale=2.6;
     const point=p=>{const east=(p.lon-center.lon)*111320*cos,north=(p.lat-center.lat)*111320;return {x:110+(east*Math.cos(heading)-north*Math.sin(heading))*scale,y:105-(east*Math.sin(heading)+north*Math.cos(heading))*scale};};
@@ -144,6 +191,7 @@
       else if(s.kind==='giveway')symbol='<path d="M-13,-11H13L0,12Z" fill="white" stroke="#be5145" stroke-width="3"/>';
       else if(s.kind==='signals')symbol='<rect x="-18" y="-7" width="36" height="14" rx="6" fill="#ecece6" stroke="#647160"/><circle cx="-11" cy="0" r="4" fill="#54896b"/><circle cy="0" r="4" fill="#d2ac42"/><circle cx="11" cy="0" r="4" fill="#bd6552"/>';
       else symbol='<circle r="11" fill="#fffef9" stroke="#516b7c" stroke-width="2"/><text text-anchor="middle" y="3" font-size="9" fill="#516b7c">標</text>';
+      symbol=imageSymbol(f,'sign',s,i)||symbol;
       return `<path d="M${actual.x.toFixed(1)},${actual.y.toFixed(1)}L${x.toFixed(1)},${y.toFixed(1)}" stroke="#b7b7a5" stroke-width=".7" stroke-dasharray="2 2"/><g transform="translate(${x},${y})">${symbol}</g>`;
     }).join('');
     const lanes={left:0,right:0};
@@ -157,7 +205,7 @@
       else if(kind==='tree')shape='<path d="M-3,3V14H3V3M-10,3Q-17,-5 -8,-8Q-7,-17 1,-13Q11,-17 12,-7Q19,1 10,5Z"/>';
       else if(kind==='memorial')shape='<path d="M-7,12V-7L0,-11L7,-7V12M-11,14H11M-2,-4V7M2,-4V7"/>';
       else shape='<path d="M-10,13V-4L0,-11L10,-4V13ZM-13,13H13M-3,13V4H3V13M-6,-1H-3M3,-1H6"/>';
-      return `<path d="M${actual.x.toFixed(1)},${actual.y.toFixed(1)}L${x},${y}" stroke="#95a28e" stroke-width=".7" stroke-dasharray="2 2"/><g transform="translate(${x},${y})"><rect x="-16" y="-22" width="32" height="40" fill="#fffefa" opacity=".94"/><g stroke="#53714e" fill="none" stroke-width="1.15" stroke-linejoin="round">${shape}</g><text x="0" y="-16" text-anchor="middle" font-size="8" font-weight="700" fill="#53714e">${i+1}</text></g>`;
+      return `<path d="M${actual.x.toFixed(1)},${actual.y.toFixed(1)}L${x},${y}" stroke="#95a28e" stroke-width=".7" stroke-dasharray="2 2"/><g transform="translate(${x},${y})"><rect x="-16" y="-22" width="32" height="40" fill="#fffefa" opacity=".94"/><g stroke="#53714e" fill="none" stroke-width="1.15" stroke-linejoin="round">${shape}</g>${imageSymbol(f,'landmark',l,i)}<text x="0" y="-16" text-anchor="middle" font-size="8" font-weight="700" fill="#53714e">${i+1}</text></g>`;
     }).join('');
     return `<svg class="diagram" viewBox="0 0 220 200" role="img" aria-label="${esc(f.label)}のコマ地図。${frameSigns(f).map(s=>esc(s.label)).join('、')}。${frameLandmarks(f).map(l=>esc(l.name)).join('、')}"><defs><marker id="arrow${unique}" markerWidth="7" markerHeight="7" refX="5.5" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0L7,3L0,6Z" fill="#20251f"/></marker></defs><g stroke="#474d42" stroke-width="1.35" fill="none" stroke-linecap="round" stroke-linejoin="round">${f.branches.map(ps=>`<path d="${path(ps)}"/>`).join('')}</g>${incoming}${incomingArrow}${outgoing}${terminal}${signs}${features}<text x="110" y="188" text-anchor="middle" fill="#b1b5a8" font-size="7">進入方向</text></svg>`;
   }
@@ -189,7 +237,7 @@
   function openFrame(index) {
     const f=result.frames[index];editingFrame=f;const e=frameEdit(f);$('editTitle').textContent=`コマ ${String(f.number).padStart(3,'0')} の確認`;$('editDiagram').innerHTML=diagram(f,'dialog');
     $('streetViewLink').href='https://www.google.com/maps/@?api=1&map_action=pano&viewpoint='+f.center.lat+','+f.center.lon;
-    $('manualLandmark').value=e.landmark||'';$('manualSign').value=e.signKind||'';$('manualSignLabel').value=e.signLabel||'';$('signSide').value=e.signSide||'left';$('frameNote').value=e.note||'';$('frameDialog').showModal();
+    $('manualLandmark').value=e.landmark||'';$('manualSign').value=e.signKind||'';$('manualSignLabel').value=e.signLabel||'';$('signSide').value=e.signSide||'left';$('frameNote').value=e.note||'';draftImages={...e.images};imageLoad++;$('saveFrame').disabled=false;$('manualPhoto').value='';$('photoStatus').textContent='';$('frameDialog').showModal();refreshImageEditor();
   }
   function exportData() {if(dirty){notify('設定が変わっています。自動生成してから保存してください');return;}if(!result){notify('先にコマ地図を生成してください');return;}const payload={format:'miura-koma-roadbook',version:4,locations,settings:settings(),result,edits};const url=URL.createObjectURL(new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download=(result.name||'コマ地図')+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);notify('コマ地図と手動追記を保存しました');}
   function validImported(p) {
@@ -230,8 +278,12 @@
     $('downloadButton').onclick=exportData;$('importButton').onclick=()=>$('fileInput').click();
     $('fileInput').onchange=async event=>{const file=event.target.files[0];if(!file)return;try{if(file.size>15000000)throw new Error('ファイルは15MB以下にしてください。');const p=JSON.parse(await file.text());if(!validImported(p))throw new Error('このアプリで保存したコマ地図ファイルを指定してください。');locations=p.locations;edits=p.edits||{};result=p.result;applySettings(p.settings);dirty=false;pickIndex=null;renderLocations();if(result.generationVersion!==4){legacyResult=result;result=null;await generate(true);}else{renderBook();fitMap();save();}status('コマ地図ファイルを読み込みました。');}catch(e){notify(e.message);}event.target.value='';};
     $('closeDialog').onclick=()=>$('frameDialog').close();
-    $('frameEditForm').onsubmit=event=>{event.preventDefault();if(!editingFrame)return;edits[editingFrame.id]={landmark:$('manualLandmark').value.trim(),signKind:$('manualSign').value,signLabel:$('manualSignLabel').value.trim(),signSide:$('signSide').value,note:$('frameNote').value.trim()};renderBook();save();$('frameDialog').close();notify('確認した目印と標識を追記しました');};
-    $('clearEdit').onclick=()=>{if(!editingFrame)return;delete edits[editingFrame.id];renderBook();save();$('frameDialog').close();};
+    $('frameDialog').addEventListener('close',()=>{imageLoad++;$('saveFrame').disabled=false;});
+    $('imageTarget').onchange=previewImage;
+    $('manualPhoto').onchange=loadManualPhoto;
+    $('removePhoto').onclick=()=>{imageLoad++;delete draftImages[$('imageTarget').value];previewImage();$('photoStatus').textContent='画像を解除しました。「追記を保存」で確定します。';$('saveFrame').disabled=false;};
+    $('frameEditForm').onsubmit=event=>{event.preventDefault();if(!editingFrame)return;edits[editingFrame.id]={landmark:$('manualLandmark').value.trim(),signKind:$('manualSign').value,signLabel:$('manualSignLabel').value.trim(),signSide:$('signSide').value,note:$('frameNote').value.trim(),images:{...draftImages}};$('frameDialog').close();renderBook();save();notify('確認した目印と標識を追記しました');};
+    $('clearEdit').onclick=()=>{if(!editingFrame)return;delete edits[editingFrame.id];$('frameDialog').close();renderBook();save();};
     $('refreshData').onclick=refreshData;
     document.addEventListener('keydown',event=>{if(event.key==='Escape'){pickIndex=null;renderLocations();updatePickHint();}});
     let resizeTimer;window.addEventListener('resize',()=>{clearTimeout(resizeTimer);resizeTimer=setTimeout(()=>{if(!view)return;const ratio=$('mapStage').clientWidth/$('mapStage').clientHeight;view.height=view.width/ratio;drawMap();},150);});
