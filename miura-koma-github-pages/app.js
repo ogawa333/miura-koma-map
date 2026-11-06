@@ -142,7 +142,7 @@
   function imageSymbol(f,kind,item,index) {
     const images=editingFrame===f&&$('frameDialog').open?draftImages:frameEdit(f).images;
     const src=images?.[imageKey(kind,item,index)];
-    return safeImage(src)?`<rect x="-33" y="-25.5" width="66" height="51" fill="white"/><image class="manual-photo" href="${esc(src)}" x="-33" y="-25.5" width="66" height="51" preserveAspectRatio="xMidYMid meet"/>`:'';
+    return safeImage(src)?`<rect x="-41.25" y="-31.875" width="82.5" height="63.75" fill="white"/><image class="manual-photo" href="${esc(src)}" x="-41.25" y="-31.875" width="82.5" height="63.75" preserveAspectRatio="xMidYMid meet"/>`:'';
   }
   function imageTargets() {
     return [...frameLandmarks(editingFrame).slice(0,4).map((item,i)=>({key:imageKey('landmark',item,i),label:`目印 ${i+1}：${item.name}`})),...frameSigns(editingFrame).map((item,i)=>({key:imageKey('sign',item,i),label:`標識 ${i+1}：${item.label}`}))];
@@ -192,7 +192,7 @@
     const outgoing=f.routeOut.length?`<path d="${path(f.routeOut)}" fill="none" stroke="#20251f" stroke-width="3.2" marker-end="url(#arrow${unique})"/>`:'';
     const terminal=f.kind==='start'||f.kind==='goal'?'<circle cx="110" cy="105" r="4.2" fill="#20251f"/>':'';
     const signs=frameSigns(f).map((s,i)=>{
-      const actual=s.lat?point(s):{x:s.side==='right'?156:64,y:126};let x=Math.max(33,Math.min(187,actual.x)),y=Math.max(32,Math.min(165,actual.y));if(Math.abs(x-110)<26)x+=i%2?-36:36;y+=i*4;
+      const actual=s.lat?point(s):{x:s.side==='right'?156:64,y:126};let x=Math.max(33,Math.min(187,actual.x)),y=Math.max(32,Math.min(165,actual.y));if(Math.abs(x-110)<26)x+=i%2?-36:36;x=Math.max(41.25,Math.min(178.75,x));y=Math.min(166,y+i*4);
       let symbol;
       if(s.kind==='stop')symbol='<path d="M-13,-11H13L0,12Z" fill="#c14f43" stroke="#a13f37" stroke-width=".7"/><text text-anchor="middle" y="-1" fill="white" font-size="5.6" font-weight="700">止まれ</text>';
       else if(s.kind==='giveway')symbol='<path d="M-13,-11H13L0,12Z" fill="white" stroke="#be5145" stroke-width="3"/>';
@@ -203,8 +203,10 @@
     }).join('');
     const lanes={left:0,right:0};
     const features=frameLandmarks(f).slice(0,4).map((l,i)=>{
-      const actual=Number.isFinite(l.lat)?point(l):{x:55,y:95},side=actual.x<108?'left':actual.x>112?'right':i%2?'right':'left';
-      const x=side==='left'?33:187,y=42+lanes[side]++*43;
+      const actual=Number.isFinite(l.lat)?point(l):{x:55,y:95};
+      let side=actual.x<108?'left':actual.x>112?'right':i%2?'right':'left';
+      if(lanes[side]>=2)side=side==='left'?'right':'left';
+      const x=side==='left'?41.25:178.75,y=48+lanes[side]++*83;
       const kind=l.kind||'building';let shape;
       if(kind==='board')shape='<path d="M0,3V15M-5,15H5"/><rect x="-10" y="-10" width="20" height="13" rx="1"/><path d="M-6,-6H6M-6,-2H3"/>';
       else if(kind==='shrine')shape='<path d="M-12,-8Q0,-4 12,-8M-10,-2H10M-7,-6L-8,14M7,-6L8,14M-10,14H-5M5,14H10"/>';
@@ -212,7 +214,8 @@
       else if(kind==='tree')shape='<path d="M-3,3V14H3V3M-10,3Q-17,-5 -8,-8Q-7,-17 1,-13Q11,-17 12,-7Q19,1 10,5Z"/>';
       else if(kind==='memorial')shape='<path d="M-7,12V-7L0,-11L7,-7V12M-11,14H11M-2,-4V7M2,-4V7"/>';
       else shape='<path d="M-10,13V-4L0,-11L10,-4V13ZM-13,13H13M-3,13V4H3V13M-6,-1H-3M3,-1H6"/>';
-      return `<path d="M${actual.x.toFixed(1)},${actual.y.toFixed(1)}L${x},${y}" stroke="#95a28e" stroke-width=".7" stroke-dasharray="2 2"/><g transform="translate(${x},${y})"><rect x="-16" y="-22" width="32" height="40" fill="#fffefa" opacity=".94"/><g stroke="#53714e" fill="none" stroke-width="1.15" stroke-linejoin="round">${shape}</g>${imageSymbol(f,'landmark',l,i)}<text x="0" y="-16" text-anchor="middle" font-size="8" font-weight="700" fill="#53714e">${i+1}</text></g>`;
+      const photo=imageSymbol(f,'landmark',l,i);
+      return `<path d="M${actual.x.toFixed(1)},${actual.y.toFixed(1)}L${x},${y}" stroke="#95a28e" stroke-width=".7" stroke-dasharray="2 2"/><g transform="translate(${x},${y})">${photo||`<g class="landmark-icon" transform="scale(0.65)"><rect x="-16" y="-22" width="32" height="40" fill="#fffefa" opacity=".94"/><g stroke="#53714e" fill="none" stroke-width="1.15" stroke-linejoin="round">${shape}</g></g>`}<text x="0" y="${photo?-34:-16}" text-anchor="middle" font-size="8" font-weight="700" fill="#53714e">${i+1}</text></g>`;
     }).join('');
     return `<svg class="diagram" viewBox="0 0 220 200" role="img" aria-label="${esc(f.label)}のコマ地図。${frameSigns(f).map(s=>esc(s.label)).join('、')}。${frameLandmarks(f).map(l=>esc(l.name)).join('、')}"><defs><marker id="arrow${unique}" markerWidth="7" markerHeight="7" refX="5.5" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0L7,3L0,6Z" fill="#20251f"/></marker></defs><g stroke="#474d42" stroke-width="1.35" fill="none" stroke-linecap="round" stroke-linejoin="round">${f.branches.map(ps=>`<path d="${path(ps)}"/>`).join('')}</g>${incoming}${incomingArrow}${outgoing}${terminal}${signs}${features}<text x="110" y="188" text-anchor="middle" fill="#b1b5a8" font-size="7">進入方向</text></svg>`;
   }
