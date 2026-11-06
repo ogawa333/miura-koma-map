@@ -142,7 +142,7 @@
   function imageSymbol(f,kind,item,index) {
     const images=editingFrame===f&&$('frameDialog').open?draftImages:frameEdit(f).images;
     const src=images?.[imageKey(kind,item,index)];
-    return safeImage(src)?`<rect x="-22" y="-17" width="44" height="34" fill="white"/><image class="manual-photo" href="${esc(src)}" x="-22" y="-17" width="44" height="34" preserveAspectRatio="xMidYMid meet"/>`:'';
+    return safeImage(src)?`<rect x="-33" y="-25.5" width="66" height="51" fill="white"/><image class="manual-photo" href="${esc(src)}" x="-33" y="-25.5" width="66" height="51" preserveAspectRatio="xMidYMid meet"/>`:'';
   }
   function imageTargets() {
     return [...frameLandmarks(editingFrame).slice(0,4).map((item,i)=>({key:imageKey('landmark',item,i),label:`目印 ${i+1}：${item.name}`})),...frameSigns(editingFrame).map((item,i)=>({key:imageKey('sign',item,i),label:`標識 ${i+1}：${item.label}`}))];
@@ -192,7 +192,7 @@
     const outgoing=f.routeOut.length?`<path d="${path(f.routeOut)}" fill="none" stroke="#20251f" stroke-width="3.2" marker-end="url(#arrow${unique})"/>`:'';
     const terminal=f.kind==='start'||f.kind==='goal'?'<circle cx="110" cy="105" r="4.2" fill="#20251f"/>':'';
     const signs=frameSigns(f).map((s,i)=>{
-      const actual=s.lat?point(s):{x:s.side==='right'?156:64,y:126};let x=Math.max(26,Math.min(194,actual.x)),y=Math.max(32,Math.min(165,actual.y));if(Math.abs(x-110)<26)x+=i%2?-36:36;y+=i*4;
+      const actual=s.lat?point(s):{x:s.side==='right'?156:64,y:126};let x=Math.max(33,Math.min(187,actual.x)),y=Math.max(32,Math.min(165,actual.y));if(Math.abs(x-110)<26)x+=i%2?-36:36;y+=i*4;
       let symbol;
       if(s.kind==='stop')symbol='<path d="M-13,-11H13L0,12Z" fill="#c14f43" stroke="#a13f37" stroke-width=".7"/><text text-anchor="middle" y="-1" fill="white" font-size="5.6" font-weight="700">止まれ</text>';
       else if(s.kind==='giveway')symbol='<path d="M-13,-11H13L0,12Z" fill="white" stroke="#be5145" stroke-width="3"/>';
@@ -204,7 +204,7 @@
     const lanes={left:0,right:0};
     const features=frameLandmarks(f).slice(0,4).map((l,i)=>{
       const actual=Number.isFinite(l.lat)?point(l):{x:55,y:95},side=actual.x<108?'left':actual.x>112?'right':i%2?'right':'left';
-      const x=side==='left'?26:194,y=45+lanes[side]++*34;
+      const x=side==='left'?33:187,y=42+lanes[side]++*43;
       const kind=l.kind||'building';let shape;
       if(kind==='board')shape='<path d="M0,3V15M-5,15H5"/><rect x="-10" y="-10" width="20" height="13" rx="1"/><path d="M-6,-6H6M-6,-2H3"/>';
       else if(kind==='shrine')shape='<path d="M-12,-8Q0,-4 12,-8M-10,-2H10M-7,-6L-8,14M7,-6L8,14M-10,14H-5M5,14H10"/>';
