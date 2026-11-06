@@ -26,10 +26,17 @@
   function presets() {
     const first=findPlace(['うらり','三崎港']);
     const shrine=searchPlaces.find(p=>p.name==='海南神社'&&p.lat>35.14&&p.tags?.amenity==='place_of_worship')||findPlace(['海南神社']);
-    const goal=searchPlaces.find(p=>p.name==='城ヶ島公園'&&p.tags?.leisure==='park')||findPlace(['城ヶ島公園','城ヶ島灯台','城ヶ島']);
+    const park=searchPlaces.find(p=>p.name==='城ヶ島公園'&&p.tags?.leisure==='park')||findPlace(['城ヶ島公園']);
+    const eastLight=searchPlaces.find(p=>p.name==='安房崎灯台'&&p.tags?.man_made==='lighthouse');
+    const horseRock=searchPlaces.find(p=>p.name==='馬の背洞門'&&p.tags?.information==='board')||findPlace(['馬の背洞門']);
+    const westLight=searchPlaces.find(p=>p.name==='城ヶ島灯台'&&p.tags?.man_made==='lighthouse');
+    const westPort=searchPlaces.find(p=>p.name==='城ヶ島'&&p.tags?.highway==='bus_stop');
+    const northPort=searchPlaces.find(p=>p.name==='白秋碑前'&&p.tags?.public_transport==='stop_position');
     const fallback = searchPlaces.find(p => ENGINE.distance(p, {lat:35.138,lon:139.62}) < 400);
-    return [first || fallback, shrine, goal].filter(Boolean).map(p=>({name:p.name,lat:p.lat,lon:p.lon,...(p===shrine?{checkpoint:true,mission:'神社の名前を案内板で確かめ、読み方と境内で見つけた特徴を1つ記録しよう。'}:{})}));
+    // Continue beyond the original park finish, then return after the island circuit.
+    return [first || fallback, shrine, park, eastLight, horseRock, westLight, westPort, northPort, park].filter(Boolean).map(p=>({name:p.name,lat:p.lat,lon:p.lon,...(p===shrine?{checkpoint:true,mission:'神社の名前を案内板で確かめ、読み方と境内で見つけた特徴を1つ記録しよう。'}:{})}));
   }
+
   function defaultMission(name='') {return /神社|寺|神宮/.test(name)?'案内板でこの場所の名前と読み方を確かめ、見つけた特徴を1つ記録しよう。':'この場所の案内板を確認し、見つけたことを1つ記録しよう。';}
   function checkpointNumber(index) {return locations.slice(0,index+1).filter(p=>p.checkpoint).length;}
   function locationName(index) { return index === 0 ? 'スタート' : index === locations.length - 1 ? 'ゴール' : `経由地 ${index}`; }
@@ -273,7 +280,7 @@
     $('routeName').addEventListener('input',()=>{if(result){result.name=$('routeName').value||'三浦港まち歩き';$('bookTitle').textContent=result.name;}save();});
     for(const id of ['autoLandmarks'])$(id).onchange=invalidate;
     $('organizerMode').onchange=()=>document.body.classList.toggle('participant',!$('organizerMode').checked);
-    $('sampleButton').onclick=()=>{locations=presets();edits={};pickIndex=null;renderLocations();updatePickHint();generate();};
+    $('sampleButton').onclick=()=>{$('routeName').value='三浦港・城ヶ島一周';locations=presets();edits={};pickIndex=null;renderLocations();updatePickHint();generate();};
     $('printButton').onclick=()=>{if(!result){notify('先にコマ地図を生成してください');return;}if(dirty){notify('設定が変わっています。自動生成してから印刷してください');return;}window.print();};
     $('downloadButton').onclick=exportData;$('importButton').onclick=()=>$('fileInput').click();
     $('fileInput').onchange=async event=>{const file=event.target.files[0];if(!file)return;try{if(file.size>15000000)throw new Error('ファイルは15MB以下にしてください。');const p=JSON.parse(await file.text());if(!validImported(p))throw new Error('このアプリで保存したコマ地図ファイルを指定してください。');locations=p.locations;edits=p.edits||{};result=p.result;applySettings(p.settings);dirty=false;pickIndex=null;renderLocations();if(result.generationVersion!==4){legacyResult=result;result=null;await generate(true);}else{renderBook();fitMap();save();}status('コマ地図ファイルを読み込みました。');}catch(e){notify(e.message);}event.target.value='';};
