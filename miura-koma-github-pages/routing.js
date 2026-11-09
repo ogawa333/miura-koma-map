@@ -165,9 +165,74 @@
     // Similar Y branches, sharp turns, unknown slopes/stop-line directions stay visible.
     return choices[0].turn<60&&choices[1].turn-choices[0].turn>=25&&choices[0].to===next;
   }
+  // Shape comparison uses the approach orientation, never the route arrow or photos.
+  function junctionSignature(frame) {
+    if(!Number.isFinite(frame.heading)||!frame.center||!Array.isArray(frame.branches)||frame.branches.length<3)return null;
+    const signature=[];
+    for(const branch of frame.branches){
+      if(!Array.isArray(branch)||branch.length<2)return null;
+      const cumulative=[0];
+      for(let i=1;i<branch.length;i++)cumulative.push(cumulative.at(-1)+distance(branch[i-1],branch[i]));
+      if(cumulative.at(-1)<2)return null;
+      const directions=[8,20].map(at=>angle(bearing(frame.center,sample(branch,cumulative,Math.min(at,cumulative.at(-1))))-frame.heading));
+      if(directions.some(x=>!Number.isFinite(x)))return null;
+      signature.push(directions);
+    }
+    return signature;
+  }
+  function similarJunctions(a,b) {
+    const left=junctionSignature(a),right=junctionSignature(b);
+    return similarSignatures(left,right);
+  }
+  function similarSignatures(a,b) {
+    // Insufficient geometry is not evidence that two junctions can be distinguished.
+    if(!a||!b)return true;
+    const small=a.length<=b.length?a:b,big=a.length<=b.length?b:a;
+    const matches=Array(big.length).fill(-1);
+    function assign(i,seen){
+      for(let j=0;j<big.length;j++){
+        if(seen.has(j)||!small[i].every((v,k)=>Math.abs(angle(v-big[j][k]))<=20*rad))continue;
+        seen.add(j);
+        if(matches[j]===-1||assign(matches[j],seen)){matches[j]=i;return true;}
+      }
+      return false;
+    }
+    let count=0;for(let i=0;i<small.length;i++)if(assign(i,new Set()))count++;
+    // Match every branch of the smaller shape; extra roads may be hidden on site.
+    return count===small.length;
+  }
   function selectFrames(frames, mode='all', edits={}) {
-    const selected=frames.filter((f,i)=>mode!=='reduced'||i===0||i===frames.length-1||!f.canOmit||(f.checkpoints||[]).length||Object.values(edits[f.id]||{}).some(v=>v&&typeof v==='object'?Object.keys(v).length:!!v));
+    const keep=frames.map((f,i)=>mode!=='reduced'||i===0||i===frames.length-1||!f.canOmit||(f.checkpoints||[]).length||Object.values(edits[f.id]||{}).some(v=>v&&typeof v==='object'?Object.keys(v).length:!!v));
+    const reasons=new Map(),signatures=frames.map(junctionSignature);
+    if(mode==='reduced'){
+      // Each insertion splits the interval. Restart until no omitted frame resembles
+      // the next displayed frame (straight instructions are checked too).
+      let changed;
+      do{
+        changed=false;let previous=0;
+        for(let target=1;target<frames.length;target++){
+          if(!keep[target])continue;
+          for(let i=previous+1;i<target;i++)if(similarSignatures(signatures[i],signatures[target])){
+            keep[i]=true;reasons.set(i,`後続の「${frames[target].label||'表示'}」地点と形が似ているため表示`);changed=true;break;
+          }
+          if(changed)break;
+          previous=target;
+        }
+      }while(changed);
+    }
+    const selected=frames.map((f,i)=>({...f,retentionReason:reasons.get(i)})).filter((_,i)=>keep[i]);
     return selected.map((f,i)=>({...f,number:i+1,fromPrevious:f.at-(i?selected[i-1].at:0)}));
+  }
+  function orderWaypoints(locations,random=Math.random) {
+    if(locations.length<=2)return [...locations];
+    const remaining=locations.slice(1,-1),ordered=[locations[0]],nearCount=Math.ceil(remaining.length/2);
+    for(let i=0;i<nearCount;i++){
+      let best=0;
+      for(let j=1;j<remaining.length;j++)if(distance(ordered.at(-1),remaining[j])<distance(ordered.at(-1),remaining[best]))best=j;
+      ordered.push(remaining.splice(best,1)[0]);
+    }
+    for(let i=remaining.length-1;i>0;i--){const j=Math.floor(random()*(i+1));[remaining[i],remaining[j]]=[remaining[j],remaining[i]];}
+    return [...ordered,...remaining,locations.at(-1)];
   }
   function makeFrames(g, ids, visits, data, options) {
     const points=ids.map(id=>g.nodes.get(id)), cumulative=[0];
@@ -212,7 +277,7 @@
       }
     }
     for(const f of frames)f.landmark=f.landmarks[0]||null;
-    return {generationVersion:6,frames,distance:total,path:points.map(p=>({lat:p.lat,lon:p.lon})),unassignedCheckpoints};
+    return {generationVersion:7,frames,distance:total,path:points.map(p=>({lat:p.lat,lon:p.lon})),unassignedCheckpoints};
   }
   function generate(data, locations, options = {}) {
     if (locations.length < 2 || locations.some(p => !Number.isFinite(p.lat) || !Number.isFinite(p.lon))) throw new Error('スタートとゴールの地点を指定してください。');
@@ -225,7 +290,7 @@
     const result = makeFrames(g, ids, visits, data, options);
     return {...result, snapped: snapped.map(s => ({...g.nodes.get(s.id), offset: s.offset})), sourceDate: data.timestamp};
   }
-  const api = {distance, bearing, angle, walkable, graph, snap, shortest, generate, continuation, selectFrames, signOf, project, landmarkInfo};
+  const api = {distance, bearing, angle, walkable, graph, snap, shortest, generate, continuation, selectFrames, junctionSignature, similarJunctions, orderWaypoints, signOf, project, landmarkInfo};
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.KomaRouting = api;
 })(typeof window === 'undefined' ? globalThis : window);
