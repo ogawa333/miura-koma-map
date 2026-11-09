@@ -47,3 +47,11 @@ test('filter keeps CP, edits, endpoints; renumbers and recalculates intervals wi
   assert.equal(r.selectFrames(frames,'all').length,6);assert.equal(frames[5].number,6);
 });
 test('legacy frames without classification are never omitted',()=>assert.equal(r.selectFrames([{id:'a'},{id:'b'},{id:'c'}],'reduced').length,3));
+test('landmarks inside 10m are attached; outside 10m are excluded; signs keep their 28m radius',()=>{
+  const d=junction([[0,20],[20,0]]);
+  d.places=[{id:'near',name:'近い看板',lat:9.9/111195,lon:0,tags:{tourism:'information',information:'board'}},{id:'far',name:'遠い看板',lat:10.1/111195,lon:0,tags:{tourism:'information',information:'board'}}];
+  d.signs=[{id:99,lat:20/111195,lon:0,tags:{highway:'stop'}}];
+  const result=r.generate(d,[d.nodes[0],d.nodes[2]]);
+  assert.deepEqual(result.frames[0].landmarks.map(l=>l.id),['near']);
+  assert.equal(result.frames[0].signs.length,1);
+});

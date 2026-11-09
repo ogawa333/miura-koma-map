@@ -35,7 +35,14 @@
     const northPort=searchPlaces.find(p=>p.name==='白秋碑前'&&p.tags?.public_transport==='stop_position');
     const fallback = searchPlaces.find(p => ENGINE.distance(p, {lat:35.138,lon:139.62}) < 400);
     // Continue beyond the original park finish, then return after the island circuit.
-    return [first || fallback, townTemple, shrine, park, eastLight, horseRock, westLight, westPort, northPort, park].filter(Boolean).map(p=>({name:p.name,lat:p.lat,lon:p.lon,...(p===shrine?{checkpoint:true,mission:'神社の名前を案内板で確かめ、読み方と境内で見つけた特徴を1つ記録しよう。'}:p===horseRock?{checkpoint:true,mission:'案内板を読み、馬の背洞門の形を言葉で説明しよう。次に進む方向をコマの道路の形と照合しよう。'}:{})}));
+    const missions=new Map([
+      [townTemple,'案内板でお寺の名前を確かめ、周辺で見つけた特徴を1つ記録しよう。'],
+      [shrine,'神社の名前を案内板で確かめ、読み方と境内で見つけた特徴を1つ記録しよう。'],
+      [eastLight,'安房崎灯台の形を観察し、城ヶ島灯台と比べるために特徴を2つ記録しよう。'],
+      [horseRock,'案内板を読み、馬の背洞門の形を言葉で説明しよう。次に進む方向をコマの道路の形と照合しよう。'],
+      [westLight,'城ヶ島灯台を観察し、安房崎灯台との共通点と違いを1つずつ挙げよう。']
+    ]);
+    return [first || fallback, townTemple, shrine, park, eastLight, horseRock, westLight, westPort, northPort, park].filter(Boolean).map(p=>({name:p.name,lat:p.lat,lon:p.lon,...(missions.has(p)?{checkpoint:true,mission:missions.get(p)}:{})}));
   }
 
   function defaultMission(name='') {return /神社|寺|神宮/.test(name)?'案内板でこの場所の名前と読み方を確かめ、見つけた特徴を1つ記録しよう。':'この場所の案内板を確認し、見つけたことを1つ記録しよう。';}
@@ -251,7 +258,7 @@
     const groups=[];for(let i=0;i+2<result.frames.length;i+=3)groups.push(result.frames.slice(i,i+3));
     const missing=groups.filter(group=>!group.some(f=>frameSigns(f).length||frameLandmarks(f).length||(f.checkpoints||[]).length)).length;
     $('coverageNotice').hidden=!result.frames.length;$('coverageNotice').classList.toggle('good',!missing);
-    $('coverageNotice').textContent=missing?`△ ${groups.length}組中${missing}組で「3コマに1つ」の目印が未確認です。看板・目印は交差点から40m以内の登録データを表示します。見える位置や表示内容は「確認・追記」で確認してください。`:`✓ 交差点付近の看板・地域の目印を${landmarks}件、道路標識・信号を${signs}件表示しています。位置は概略です。`;
+    $('coverageNotice').textContent=missing?`△ ${groups.length}組中${missing}組で「3コマに1つ」の目印が未確認です。看板・目印は交差点から10m以内の登録データを表示します。見える位置や表示内容は「確認・追記」で確認してください。`:`✓ 交差点付近の看板・地域の目印を${landmarks}件、道路標識・信号を${signs}件表示しています。位置は概略です。`;
     $('frameGrid').innerHTML=result.frames.length?result.frames.map(f=>{
       const marks=frameSigns(f),features=frameLandmarks(f),e=frameEdit(f),cps=f.checkpoints||[],tag=cps.length?cps.map(cp=>'CP '+cp.number).join(' / '):features.length?'目印あり':marks.length?'標識あり':'交差点';
       return `<article class="koma ${cps.length?'checkpoint-koma':''}" id="frame${f.number}"><div class="koma-head"><span class="koma-number">${String(f.number).padStart(3,'0')}</span><span class="type ${features.length||marks.length||cps.length?'marker':''}">${esc(tag)}</span></div>${diagram(f,'card'+f.number)}${cps.map(cp=>checkpointHTML(cp)).join('')}<div class="koma-body"><div class="koma-direction">${esc(f.label)}</div>${marks.length?`<div class="koma-sign">${marks.map(s=>`<span class="sign-chip">${esc(s.label)}${s.code?' '+esc(s.code):''}${photoLink('sign',s)}</span>`).join('')}</div>`:''}${features.map((l,i)=>`<div class="koma-note landmark-note"><b>${i<4?i+1:'◇'}</b><span>${esc(l.name)}<small>${esc(l.category||'確認した目印')}</small></span>${photoLink('landmark',l)}</div>`).join('')}${e.note?`<div class="koma-note">${esc(e.note)}</div>`:''}</div><div class="koma-info"><span>${Math.round(f.at)} m 地点${!marks.length?' · 標識未確認':''}</span><button data-edit="${f.number-1}">確認・追記 ↗</button></div></article>`;
@@ -293,7 +300,7 @@
   function start() {
     if(!data||!ENGINE){status('道路データを読み込めません。index.html / app.js / routing.js / data フォルダを一緒に置いて開いてください。',true);return;}
     initializePlaces();
-    try {const saved=JSON.parse(localStorage.getItem(STORAGE));if([2,3,4].includes(saved?.version)){locations=saved.locations||[];edits=saved.edits||{};dirty=!!saved.dirty;applySettings(saved.settings);if(Array.isArray(saved.result?.frames)&&saved.result?.path?.length)result=saved.result;if(saved.version===2){locations=locations.map((p,i)=>i>0&&i<locations.length-1&&/神社|寺|神宮/.test(p.name||'')?{...p,checkpoint:true,mission:defaultMission(p.name)}:p);if(locations.some(p=>p.checkpoint))result=null;}if(result&&result.generationVersion!==5){legacyResult=result;result=null;}if(dirty)result=null;}}catch{}
+    try {const saved=JSON.parse(localStorage.getItem(STORAGE));if([2,3,4].includes(saved?.version)){locations=saved.locations||[];edits=saved.edits||{};dirty=!!saved.dirty;applySettings(saved.settings);if(Array.isArray(saved.result?.frames)&&saved.result?.path?.length)result=saved.result;if(saved.version===2){locations=locations.map((p,i)=>i>0&&i<locations.length-1&&/神社|寺|神宮/.test(p.name||'')?{...p,checkpoint:true,mission:defaultMission(p.name)}:p);if(locations.some(p=>p.checkpoint))result=null;}if(result&&result.generationVersion!==6){legacyResult=result;result=null;}if(dirty)result=null;}}catch{}
     if(locations.length<2){locations=presets();if(locations.length<2)locations=[{name:''},{name:''}];}
     renderLocations();hookMap();fitMap();if(result){renderBook();status(`${result.frames.length}コマの保存データを復元しました。`);}else status('地名一覧から選ぶか、⌖ で地図上の道路を選択してください。');
     $('routeForm').onsubmit=event=>{event.preventDefault();generate();};
@@ -306,7 +313,7 @@
     $('sampleButton').onclick=()=>{$('frameMode').value='reduced';$('routeName').value='三浦港・城ヶ島一周チャレンジ';locations=presets();edits={};pickIndex=null;renderLocations();updatePickHint();generate();};
     $('printButton').onclick=()=>{if(!result){notify('先にコマ地図を生成してください');return;}if(dirty){notify('設定が変わっています。自動生成してから印刷してください');return;}window.print();};
     $('downloadButton').onclick=exportData;$('importButton').onclick=()=>$('fileInput').click();
-    $('fileInput').onchange=async event=>{const file=event.target.files[0];if(!file)return;try{if(file.size>15000000)throw new Error('ファイルは15MB以下にしてください。');const p=JSON.parse(await file.text());if(!validImported(p))throw new Error('このアプリで保存したコマ地図ファイルを指定してください。');locations=p.locations;edits=p.edits||{};result=p.result;applySettings(p.settings);dirty=false;pickIndex=null;renderLocations();if(result.generationVersion!==5){legacyResult=result;result=null;await generate(true);}else{renderBook();fitMap();save();}status('コマ地図ファイルを読み込みました。');}catch(e){notify(e.message);}event.target.value='';};
+    $('fileInput').onchange=async event=>{const file=event.target.files[0];if(!file)return;try{if(file.size>15000000)throw new Error('ファイルは15MB以下にしてください。');const p=JSON.parse(await file.text());if(!validImported(p))throw new Error('このアプリで保存したコマ地図ファイルを指定してください。');locations=p.locations;edits=p.edits||{};result=p.result;applySettings(p.settings);dirty=false;pickIndex=null;renderLocations();if(result.generationVersion!==6){legacyResult=result;result=null;await generate(true);}else{renderBook();fitMap();save();}status('コマ地図ファイルを読み込みました。');}catch(e){notify(e.message);}event.target.value='';};
     $('closeDialog').onclick=()=>$('frameDialog').close();
     $('frameDialog').addEventListener('close',()=>{imageLoad++;$('saveFrame').disabled=false;});
     $('imageTarget').onchange=previewImage;

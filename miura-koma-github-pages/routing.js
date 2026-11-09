@@ -206,13 +206,13 @@
     const places=(data.places||[]).map(p=>({p,info:landmarkInfo(p)})).filter(x=>x.info).sort((a,b)=>b.info.priority-a.info.priority);
     for(const {p,info} of places){
       if(!Number.isFinite(p.lat)||!Number.isFinite(p.lon))continue;
-      for(const f of nearestFrames(p,40)){
+      for(const f of nearestFrames(p,10)){
         if(f.landmarks.some(l=>l.id===p.id||(l.name===p.name&&l.kind===info.kind&&distance(l,p)<20)))continue;
         f.landmarks.push({...p,...info,source:'OpenStreetMap'});
       }
     }
     for(const f of frames)f.landmark=f.landmarks[0]||null;
-    return {generationVersion:5,frames,distance:total,path:points.map(p=>({lat:p.lat,lon:p.lon})),unassignedCheckpoints};
+    return {generationVersion:6,frames,distance:total,path:points.map(p=>({lat:p.lat,lon:p.lon})),unassignedCheckpoints};
   }
   function generate(data, locations, options = {}) {
     if (locations.length < 2 || locations.some(p => !Number.isFinite(p.lat) || !Number.isFinite(p.lon))) throw new Error('スタートとゴールの地点を指定してください。');
