@@ -10,7 +10,7 @@
   const typeLabels = {start:'START',goal:'GOAL',via:'経由地',junction:'交差点',bend:'曲がり角',continue:'道なり'};
   function notify(message) { $('toast').textContent = message; $('toast').classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => $('toast').classList.remove('show'), 3000); }
   function status(message, error = false) { $('status').textContent = message; $('status').classList.toggle('error', error); }
-  function settings() { return {name:$('routeName').value.trim() || '三浦港まち歩き', maxGap:0,mode:'junctions',landmarkEvery:3,autoLandmarks:$('autoLandmarks').checked}; }
+  function settings() { return {name:$('routeName').value.trim() || '三浦港まち歩き', maxGap:0,mode:'junctions',frameMode:$('frameMode').value,landmarkEvery:3,autoLandmarks:$('autoLandmarks').checked}; }
   function save() { try {localStorage.setItem(STORAGE, JSON.stringify({version:4,locations,settings:settings(),edits,result,dirty})); $('saveState').textContent = '変更を保存しました';} catch { $('saveState').textContent = '自動保存できません。データ保存をご利用ください'; } }
   function invalidate() {dirty = true; $('generateButton').textContent = '↗ 設定したコースで再生成'; status('設定を変更しました。「自動生成」で地図を更新してください。'); updateGoogleLink(); save(); }
   function initializePlaces() {
@@ -25,6 +25,7 @@
   function findPlace(names) {for (const name of names) {const exact = searchPlaces.find(p=>p.name===name); if(exact)return {...exact}; const partial=searchPlaces.find(p=>p.name.includes(name)); if(partial)return {...partial};} return null;}
   function presets() {
     const first=findPlace(['うらり','三崎港']);
+    const townTemple=findPlace(['見桃寺']);
     const shrine=searchPlaces.find(p=>p.name==='海南神社'&&p.lat>35.14&&p.tags?.amenity==='place_of_worship')||findPlace(['海南神社']);
     const park=searchPlaces.find(p=>p.name==='城ヶ島公園'&&p.tags?.leisure==='park')||findPlace(['城ヶ島公園']);
     const eastLight=searchPlaces.find(p=>p.name==='安房崎灯台'&&p.tags?.man_made==='lighthouse');
@@ -34,7 +35,7 @@
     const northPort=searchPlaces.find(p=>p.name==='白秋碑前'&&p.tags?.public_transport==='stop_position');
     const fallback = searchPlaces.find(p => ENGINE.distance(p, {lat:35.138,lon:139.62}) < 400);
     // Continue beyond the original park finish, then return after the island circuit.
-    return [first || fallback, shrine, park, eastLight, horseRock, westLight, westPort, northPort, park].filter(Boolean).map(p=>({name:p.name,lat:p.lat,lon:p.lon,...(p===shrine?{checkpoint:true,mission:'神社の名前を案内板で確かめ、読み方と境内で見つけた特徴を1つ記録しよう。'}:{})}));
+    return [first || fallback, townTemple, shrine, park, eastLight, horseRock, westLight, westPort, northPort, park].filter(Boolean).map(p=>({name:p.name,lat:p.lat,lon:p.lon,...(p===shrine?{checkpoint:true,mission:'神社の名前を案内板で確かめ、読み方と境内で見つけた特徴を1つ記録しよう。'}:p===horseRock?{checkpoint:true,mission:'案内板を読み、馬の背洞門の形を言葉で説明しよう。次に進む方向をコマの道路の形と照合しよう。'}:{})}));
   }
 
   function defaultMission(name='') {return /神社|寺|神宮/.test(name)?'案内板でこの場所の名前と読み方を確かめ、見つけた特徴を1つ記録しよう。':'この場所の案内板を確認し、見つけたことを1つ記録しよう。';}
@@ -49,7 +50,7 @@
     $('locationFields').querySelectorAll('[data-pick]').forEach(button=>button.onclick=()=>{pickIndex=pickIndex===Number(button.dataset.pick)?null:Number(button.dataset.pick);renderLocations();updatePickHint();});
     $('locationFields').querySelectorAll('[data-remove]').forEach(button=>button.onclick=()=>{locations.splice(Number(button.dataset.remove),1);pickIndex=null;renderLocations();drawMap();updatePickHint();invalidate();});
     $('locationFields').querySelectorAll('[data-checkpoint]').forEach(input=>input.onchange=()=>{const p=locations[Number(input.dataset.checkpoint)];p.checkpoint=input.checked;if(p.checkpoint&&!p.mission)p.mission=defaultMission(p.name);renderLocations();drawMap();invalidate();});
-    $('locationFields').querySelectorAll('[data-mission]').forEach(input=>input.oninput=()=>{const index=Number(input.dataset.mission);locations[index].mission=input.value;if(result&&!dirty){for(const cp of [...result.frames.flatMap(f=>f.checkpoints||[]),...(result.unassignedCheckpoints||[])])if(cp.locationIndex===index)cp.mission=input.value.trim()||defaultMission(locations[index].name);result.locations=structuredClone(locations);renderBook();}save();});
+    $('locationFields').querySelectorAll('[data-mission]').forEach(input=>input.oninput=()=>{const index=Number(input.dataset.mission);locations[index].mission=input.value;if(result&&!dirty){for(const cp of [...(result.allFrames||result.frames).flatMap(f=>f.checkpoints||[]),...(result.unassignedCheckpoints||[])])if(cp.locationIndex===index)cp.mission=input.value.trim()||defaultMission(locations[index].name);result.locations=structuredClone(locations);renderBook();}save();});
     updateGoogleLink();
   }
   function resolveLocation(input) {
@@ -82,7 +83,7 @@
       const previous=result||legacyResult;
       if(previous)for(const old of previous.frames||[]){const edit=edits[old.id];if(!edit)continue;const match=next.frames.find(f=>ENGINE.distance(f.center,old.center)<1.5&&Math.abs(f.at-old.at)<5);if(match&&!edits[match.id])edits[match.id]=edit;}
       legacyResult=null;
-      result={...next,name:config.name,locations:structuredClone(locations),settings:config};dirty=false;
+      result={...next,allFrames:next.frames,name:config.name,locations:structuredClone(locations),settings:config};dirty=false;
       renderBook();fitMap();save();
       const offset=next.snapped.filter(s=>s.offset>40);
       status(`${result.frames.length}コマを生成しました。${offset.length?` ${offset.length}地点を近くの道路へ補正しました。`:''}`);
@@ -236,11 +237,16 @@
   }
   function renderBook() {
     if(!result)return;
+    result.allFrames ||= result.frames;
+    result.frames=ENGINE.selectFrames(result.allFrames,$('frameMode').value,edits);
+    result.settings={...result.settings,frameMode:$('frameMode').value};
+    $('frameSummary').textContent=`全${result.allFrames.length}交差点中${result.frames.length}コマを表示（${result.allFrames.length-result.frames.length}コマ省略）`;
+    $('followingRule').hidden=$('frameMode').value!=='reduced';
     $('bookTitle').textContent=result.name;
-    $('bookSubtitle').textContent='交差点のみを番号順に表示。進入方向は下、黒い矢印が進行方向です。';
+    $('bookSubtitle').textContent=$('frameMode').value==='reduced'?'省略した交差点は道なりに進み、次のコマと交差点の形が一致したら矢印へ進みます。':'全交差点を番号順に表示。進入方向は下、黒い矢印が進行方向です。';
     $('routeEnds').textContent=`スタート：${result.locations?.[0]?.name||''}　→　ゴール：${result.locations?.at(-1)?.name||''}`;
     const signs=result.frames.reduce((sum,f)=>sum+frameSigns(f).length,0),landmarks=result.frames.reduce((sum,f)=>sum+frameLandmarks(f).length,0);
-    const cps=[...result.frames.flatMap(f=>f.checkpoints||[]),...(result.unassignedCheckpoints||[])];
+    const cps=[...(result.allFrames||result.frames).flatMap(f=>f.checkpoints||[]),...(result.unassignedCheckpoints||[])];
     $('metrics').hidden=false;$('metrics').innerHTML=`<div class="metric"><small>交差点のコマ</small><strong>${result.frames.length}<span>コマ</span></strong></div><div class="metric"><small>コースの長さ</small><strong>${(result.distance/1000).toFixed(2)}<span>km</span></strong></div><div class="metric"><small>看板・地域の目印</small><strong>${landmarks}<span>件</span></strong></div><div class="metric"><small>チェックポイント</small><strong>${cps.length}<span>か所</span></strong></div>`;
     const groups=[];for(let i=0;i+2<result.frames.length;i+=3)groups.push(result.frames.slice(i,i+3));
     const missing=groups.filter(group=>!group.some(f=>frameSigns(f).length||frameLandmarks(f).length||(f.checkpoints||[]).length)).length;
@@ -253,6 +259,7 @@
     $('checkpointAside').innerHTML=(result.unassignedCheckpoints||[]).map(cp=>checkpointHTML(cp)).join('');
     $('printSource').textContent=`道路データ取得日：${formatDate(result.sourceDate||data.timestamp)} · 目印の記号：▤ 看板 / ⛩ 寺社 / □ 建物・史跡`;
     for(const container of [$('frameGrid'),$('checkpointAside')])container.querySelectorAll('[data-mission-edit]').forEach(button=>button.onclick=()=>{const field=$('mission'+button.dataset.missionEdit);if(field){field.scrollIntoView({behavior:'smooth',block:'center'});field.focus({preventScroll:true});}});
+    drawMap();
     $('frameGrid').querySelectorAll('[data-edit]').forEach(button=>button.onclick=()=>openFrame(Number(button.dataset.edit)));
   }
   function openFrame(index) {
@@ -262,9 +269,10 @@
   }
   function exportData() {if(dirty){notify('設定が変わっています。自動生成してから保存してください');return;}if(!result){notify('先にコマ地図を生成してください');return;}const payload={format:'miura-koma-roadbook',version:4,locations,settings:settings(),result,edits};const url=URL.createObjectURL(new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download=(result.name||'コマ地図')+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);notify('コマ地図と手動追記を保存しました');}
   function validImported(p) {
+    if(p?.result?.allFrames!==undefined){const {allFrames,...rest}=p.result;if(!validImported({...p,result:{...rest,frames:allFrames}}))return false;}
     return p?.format==='miura-koma-roadbook'&&[2,3,4].includes(p.version)&&Array.isArray(p.locations)&&p.locations.length>=2&&p.locations.length<=12&&p.locations.every(l=>Number.isFinite(l.lat)&&Number.isFinite(l.lon))&&Array.isArray(p.result?.frames)&&p.result.frames.length>=0&&p.result.frames.length<3000&&Array.isArray(p.result?.path)&&p.result.frames.every(f=>Number.isFinite(f.center?.lat)&&Number.isFinite(f.center?.lon)&&Number.isFinite(f.heading)&&Array.isArray(f.branches)&&f.branches.every(a=>Array.isArray(a)&&a.every(q=>Number.isFinite(q.lat)&&Number.isFinite(q.lon)))&&Array.isArray(f.routeIn)&&Array.isArray(f.routeOut)&&Array.isArray(f.signs));
   }
-  function applySettings(s) {if(!s)return;$('routeName').value=s.name||'三浦港まち歩き';$('autoLandmarks').checked=s.autoLandmarks!==false;}
+  function applySettings(s) {if(!s)return;$('routeName').value=s.name||'三浦港まち歩き';$('autoLandmarks').checked=s.autoLandmarks!==false;$('frameMode').value=s.frameMode==='reduced'?'reduced':'all';}
   async function refreshData() {
     const button=$('refreshData');button.disabled=true;status('登録済みの道路・標識を取得しています。最大60秒ほどかかります…');
     const b=data.bounds,box=`${b.south},${b.west},${b.north},${b.east}`;
@@ -285,7 +293,7 @@
   function start() {
     if(!data||!ENGINE){status('道路データを読み込めません。index.html / app.js / routing.js / data フォルダを一緒に置いて開いてください。',true);return;}
     initializePlaces();
-    try {const saved=JSON.parse(localStorage.getItem(STORAGE));if([2,3,4].includes(saved?.version)){locations=saved.locations||[];edits=saved.edits||{};dirty=!!saved.dirty;applySettings(saved.settings);if(Array.isArray(saved.result?.frames)&&saved.result?.path?.length)result=saved.result;if(saved.version===2){locations=locations.map((p,i)=>i>0&&i<locations.length-1&&/神社|寺|神宮/.test(p.name||'')?{...p,checkpoint:true,mission:defaultMission(p.name)}:p);if(locations.some(p=>p.checkpoint))result=null;}if(result&&result.generationVersion!==4){legacyResult=result;result=null;}if(dirty)result=null;}}catch{}
+    try {const saved=JSON.parse(localStorage.getItem(STORAGE));if([2,3,4].includes(saved?.version)){locations=saved.locations||[];edits=saved.edits||{};dirty=!!saved.dirty;applySettings(saved.settings);if(Array.isArray(saved.result?.frames)&&saved.result?.path?.length)result=saved.result;if(saved.version===2){locations=locations.map((p,i)=>i>0&&i<locations.length-1&&/神社|寺|神宮/.test(p.name||'')?{...p,checkpoint:true,mission:defaultMission(p.name)}:p);if(locations.some(p=>p.checkpoint))result=null;}if(result&&result.generationVersion!==5){legacyResult=result;result=null;}if(dirty)result=null;}}catch{}
     if(locations.length<2){locations=presets();if(locations.length<2)locations=[{name:''},{name:''}];}
     renderLocations();hookMap();fitMap();if(result){renderBook();status(`${result.frames.length}コマの保存データを復元しました。`);}else status('地名一覧から選ぶか、⌖ で地図上の道路を選択してください。');
     $('routeForm').onsubmit=event=>{event.preventDefault();generate();};
@@ -293,11 +301,12 @@
     $('addCheckpoint').onclick=()=>{if(locations.length>=12){notify('経由地・CPは合計10か所まで追加できます');return;}locations.splice(locations.length-1,0,{name:'',checkpoint:true,mission:defaultMission()});pickIndex=locations.length-2;renderLocations();updatePickHint();invalidate();};
     $('routeName').addEventListener('input',()=>{if(result){result.name=$('routeName').value||'三浦港まち歩き';$('bookTitle').textContent=result.name;}save();});
     for(const id of ['autoLandmarks'])$(id).onchange=invalidate;
+    $('frameMode').onchange=()=>{if(result){renderBook();save();status($('frameSummary').textContent);}};
     $('organizerMode').onchange=()=>document.body.classList.toggle('participant',!$('organizerMode').checked);
-    $('sampleButton').onclick=()=>{$('routeName').value='三浦港・城ヶ島一周';locations=presets();edits={};pickIndex=null;renderLocations();updatePickHint();generate();};
+    $('sampleButton').onclick=()=>{$('frameMode').value='reduced';$('routeName').value='三浦港・城ヶ島一周チャレンジ';locations=presets();edits={};pickIndex=null;renderLocations();updatePickHint();generate();};
     $('printButton').onclick=()=>{if(!result){notify('先にコマ地図を生成してください');return;}if(dirty){notify('設定が変わっています。自動生成してから印刷してください');return;}window.print();};
     $('downloadButton').onclick=exportData;$('importButton').onclick=()=>$('fileInput').click();
-    $('fileInput').onchange=async event=>{const file=event.target.files[0];if(!file)return;try{if(file.size>15000000)throw new Error('ファイルは15MB以下にしてください。');const p=JSON.parse(await file.text());if(!validImported(p))throw new Error('このアプリで保存したコマ地図ファイルを指定してください。');locations=p.locations;edits=p.edits||{};result=p.result;applySettings(p.settings);dirty=false;pickIndex=null;renderLocations();if(result.generationVersion!==4){legacyResult=result;result=null;await generate(true);}else{renderBook();fitMap();save();}status('コマ地図ファイルを読み込みました。');}catch(e){notify(e.message);}event.target.value='';};
+    $('fileInput').onchange=async event=>{const file=event.target.files[0];if(!file)return;try{if(file.size>15000000)throw new Error('ファイルは15MB以下にしてください。');const p=JSON.parse(await file.text());if(!validImported(p))throw new Error('このアプリで保存したコマ地図ファイルを指定してください。');locations=p.locations;edits=p.edits||{};result=p.result;applySettings(p.settings);dirty=false;pickIndex=null;renderLocations();if(result.generationVersion!==5){legacyResult=result;result=null;await generate(true);}else{renderBook();fitMap();save();}status('コマ地図ファイルを読み込みました。');}catch(e){notify(e.message);}event.target.value='';};
     $('closeDialog').onclick=()=>$('frameDialog').close();
     $('frameDialog').addEventListener('close',()=>{imageLoad++;$('saveFrame').disabled=false;});
     $('imageTarget').onchange=previewImage;

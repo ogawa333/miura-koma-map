@@ -135,6 +135,40 @@
     if(name&&(t.shop||['police','townhall','post_office','school'].includes(t.amenity))) return {kind:'building',category:'建物・店舗',priority:30};
     return null;
   }
+  // Only omit an unambiguous continuation; unknown physical conditions keep a diagram.
+  function continuation(g, ids, index) {
+    if(index===0||index===ids.length-1||ids[index-1]===ids[index+1])return false;
+    const id=ids[index],prev=ids[index-1],next=ids[index+1],center=g.nodes.get(id);
+    const incoming=(g.visual.get(id)||[]).find(e=>e.to===prev);
+    const candidates=(g.visual.get(id)||[]).filter(e=>e.to!==prev);
+    // A visible but unwalkable branch can still look like the natural continuation.
+    if(!incoming||candidates.length<2||candidates.some(e=>!(g.adj.get(id)||[]).some(a=>a.to===e.to)))return false;
+    if(signOf(center)||candidates.some(e=>signOf(g.nodes.get(e.to))))return false;
+    const approach=roadShape(g,id,prev,8).at(-1),heading=bearing(approach,center);
+    let choices=candidates.map(e=>({...e,turn:Math.abs(angle(bearing(center,roadShape(g,id,e.to,8).at(-1))-heading))/rad}));
+    // Prefer straight ahead only when it is clearly distinct from every other branch.
+    const sorted=[...choices].sort((a,b)=>a.turn-b.turn);
+    if(sorted[0].turn<25&&sorted[1].turn-sorted[0].turn>=20)return sorted[0].to===next;
+    // Unknown centerlines cannot be inferred from road names or road categories.
+    // Width and surface continuity are used only if all branches have explicit data.
+    const tags=incoming.way.tags||{};
+    for(const key of ['width','surface']) {
+      const value=tags[key];
+      if(!value||!choices.every(e=>e.way.tags?.[key]))continue;
+      const matching=choices.filter(e=>key==='width'
+        ? Number.isFinite(Number(value))&&Number.isFinite(Number(e.way.tags[key]))&&Math.abs(Number(value)-Number(e.way.tags[key]))<=.5
+        :e.way.tags[key]===value);
+      if(matching.length)choices=matching;
+    }
+    if(choices.length===1)return choices[0].turn<90&&choices[0].to===next;
+    choices.sort((a,b)=>a.turn-b.turn);
+    // Similar Y branches, sharp turns, unknown slopes/stop-line directions stay visible.
+    return choices[0].turn<60&&choices[1].turn-choices[0].turn>=25&&choices[0].to===next;
+  }
+  function selectFrames(frames, mode='all', edits={}) {
+    const selected=frames.filter((f,i)=>mode!=='reduced'||i===0||i===frames.length-1||!f.canOmit||(f.checkpoints||[]).length||Object.values(edits[f.id]||{}).some(v=>v&&typeof v==='object'?Object.keys(v).length:!!v));
+    return selected.map((f,i)=>({...f,number:i+1,fromPrevious:f.at-(i?selected[i-1].at:0)}));
+  }
   function makeFrames(g, ids, visits, data, options) {
     const points=ids.map(id=>g.nodes.get(id)), cumulative=[0];
     for(let i=1;i<points.length;i++) cumulative.push(cumulative.at(-1)+distance(points[i-1],points[i]));
@@ -157,7 +191,7 @@
       if(e.at>0){routeIn.push(before);for(let j=0;j<points.length;j++)if(cumulative[j]>beforeAt&&cumulative[j]<e.at)routeIn.push(points[j]);routeIn.push(center);}
       if(e.at<total){routeOut.push(center);for(let j=0;j<points.length;j++)if(cumulative[j]>e.at&&cumulative[j]<afterAt)routeOut.push(points[j]);routeOut.push(after);}
       const occurrence=occurrences.get(ids[e.nodeIndex])||0;occurrences.set(ids[e.nodeIndex],occurrence+1);
-      return {id:`junction:${ids[e.nodeIndex]}:${occurrence}`,number:i+1,center:{lat:center.lat,lon:center.lon},routeIndex:e.nodeIndex,at:e.at,kind:'junction',isJunction:true,checkpoints:[],label:Math.abs(turn)<25?'直進':Math.abs(turn)>155?'折り返し':turn>0?'右へ進む':'左へ進む',heading,branches:(g.visual.get(ids[e.nodeIndex])||[]).map(edge=>roadShape(g,ids[e.nodeIndex],edge.to)),routeIn,routeOut,signs:[],landmark:null,landmarks:[],fromPrevious:e.at-(i?events[i-1].at:0)};
+      return {id:`junction:${ids[e.nodeIndex]}:${occurrence}`,number:i+1,center:{lat:center.lat,lon:center.lon},routeIndex:e.nodeIndex,at:e.at,kind:'junction',isJunction:true,canOmit:!visits.some(v=>v.nodeIndex===e.nodeIndex)&&continuation(g,ids,e.nodeIndex),checkpoints:[],label:Math.abs(turn)<25?'直進':Math.abs(turn)>155?'折り返し':turn>0?'右へ進む':'左へ進む',heading,branches:(g.visual.get(ids[e.nodeIndex])||[]).map(edge=>roadShape(g,ids[e.nodeIndex],edge.to)),routeIn,routeOut,signs:[],landmark:null,landmarks:[],fromPrevious:e.at-(i?events[i-1].at:0)};
     });
     const unassignedCheckpoints=[];
     for(const visit of visits.filter(v=>v.checkpoint)){
@@ -178,7 +212,7 @@
       }
     }
     for(const f of frames)f.landmark=f.landmarks[0]||null;
-    return {generationVersion:4,frames,distance:total,path:points.map(p=>({lat:p.lat,lon:p.lon})),unassignedCheckpoints};
+    return {generationVersion:5,frames,distance:total,path:points.map(p=>({lat:p.lat,lon:p.lon})),unassignedCheckpoints};
   }
   function generate(data, locations, options = {}) {
     if (locations.length < 2 || locations.some(p => !Number.isFinite(p.lat) || !Number.isFinite(p.lon))) throw new Error('スタートとゴールの地点を指定してください。');
@@ -191,7 +225,7 @@
     const result = makeFrames(g, ids, visits, data, options);
     return {...result, snapped: snapped.map(s => ({...g.nodes.get(s.id), offset: s.offset})), sourceDate: data.timestamp};
   }
-  const api = {distance, bearing, angle, walkable, graph, snap, shortest, generate, signOf, project, landmarkInfo};
+  const api = {distance, bearing, angle, walkable, graph, snap, shortest, generate, continuation, selectFrames, signOf, project, landmarkInfo};
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.KomaRouting = api;
 })(typeof window === 'undefined' ? globalThis : window);
