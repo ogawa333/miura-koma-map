@@ -16,6 +16,8 @@
   function initializePlaces() {
     const counts = new Map(); for (const p of data.places) counts.set(p.name, (counts.get(p.name) || 0) + 1);
     searchPlaces = data.places.map(p => ({...p,value:counts.get(p.name) > 1 ? `${p.name} (${p.lat.toFixed(5)}, ${p.lon.toFixed(5)})` : p.name})).sort((a,b) => a.name.localeCompare(b.name,'ja'));
+    const suwa=searchPlaces.find(p=>p.id==='w395998661');
+    if(suwa)searchPlaces.push({...suwa,name:'向ヶ崎諏訪神社',value:'向ヶ崎諏訪神社'});
     $('placeList').innerHTML = searchPlaces.map(p => `<option value="${esc(p.value)}"></option>`).join('');
     $('dataInfo').textContent = `${formatDate(data.timestamp)}取得 · 道路 ${data.ways.length.toLocaleString()}本 / 標識・信号 ${data.signs.length}地点。対象範囲内で利用できます。`;
     $('printSource').textContent = `道路データ取得日：${formatDate(data.timestamp)}`;
@@ -29,8 +31,13 @@
     const stops=names.map(name=>searchPlaces.find(p=>p.name===name&&p.lat>35.14));
     if(!first||stops.some(p=>!p))throw new Error('モデルコースの地点が見つかりません。同梱データを確認してください。');
     const checkpoints=stops.map(p=>({name:p.name,lat:p.lat,lon:p.lon,checkpoint:true,mission:/神社|神明社|寺/.test(p.name)?'案内板で名前を確かめ、周辺で見つけた特徴を1つ記録しよう。':'周辺を観察し、この地域の特徴を1つ記録しよう。'}));
+    // The local OSM dataset lists the Suwa shrine under the shorter name 諏訪神社.
+    const suwa=searchPlaces.find(p=>p.id==='w395998661');
+    const kannon=searchPlaces.find(p=>p.id==='n3988006045');
+    if(!suwa||!kannon)throw new Error('追加の経由地点が見つかりません。同梱データを確認してください。');
+    const additions=[{...suwa,name:'向ヶ崎諏訪神社'},kannon].map(p=>({name:p.name,lat:p.lat,lon:p.lon}));
     const start={name:first.name,lat:first.lat,lon:first.lon};
-    return ENGINE.orderWaypoints([start,...checkpoints,{...start,name:first.name+'（ゴール）'}]);
+    return ENGINE.orderWaypoints([start,...checkpoints,...additions,{...start,name:first.name+'（ゴール）'}]);
   }
 
   function defaultMission(name='') {return /神社|寺|神宮/.test(name)?'案内板でこの場所の名前と読み方を確かめ、見つけた特徴を1つ記録しよう。':'この場所の案内板を確認し、見つけたことを1つ記録しよう。';}
