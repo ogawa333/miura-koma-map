@@ -116,3 +116,19 @@ test('a three-way junction stays omitted before a four-way target, but not befor
   assert.equal(r.selectFrames([start,early,{...target,...shape([180,0,90])}],'reduced').length,3);
   assert.equal(r.selectFrames([start,early,target],'all').length,3);
 });
+test('Suwa shrine and Gozu Kannon are reachable as extra waypoints with five CPs in all six tail orders',()=>{
+  global.window={};delete require.cache[require.resolve('../miura-koma-github-pages/data/miura-network.js')];
+  require('../miura-koma-github-pages/data/miura-network.js');const d=global.window.MIURA_NETWORK;delete global.window;
+  const first=d.places.find(p=>p.name==='うらり');
+  const stops=['見桃寺','海南神社','栄児童公園','宮川神明社','原稲荷神社'].map(name=>({...d.places.find(p=>p.name===name&&p.lat>35.14),checkpoint:true}));
+  const additions=['w395998661','n3988006045'].map(id=>d.places.find(p=>p.id===id));
+  const ordered=r.orderWaypoints([first,...stops,...additions,first],()=>.99),head=ordered.slice(0,5),tail=ordered.slice(5,-1);
+  for(const perm of [[0,1,2],[0,2,1],[1,0,2],[1,2,0],[2,0,1],[2,1,0]]){
+    const locations=[...head,...perm.map(i=>tail[i]),first],result=r.generate(d,locations);
+    assert.equal(locations.length,9);assert.ok(additions.every(p=>locations.some(l=>l.id===p.id)));
+    assert.equal(locations.filter(l=>l.checkpoint).length,5);
+    assert.equal(result.frames.flatMap(f=>f.checkpoints).length+result.unassignedCheckpoints.length,5);
+    assert.ok(result.snapped.every(p=>p.offset<30));assert.ok(result.path.every(p=>p.lat>35.14));
+    assert.ok(result.distance>6000&&result.distance<9000);
+  }
+});
