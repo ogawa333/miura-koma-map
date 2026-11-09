@@ -23,13 +23,13 @@
       <section class="planner panel" aria-labelledby="plannerTitle">
         <div class="section-heading"><h2 id="plannerTitle">コースを設定</h2><span class="mini-label">01 / PLAN</span></div>
         <form id="routeForm">
-          <label class="field-label" for="routeName">コース名</label><input id="routeName" value="三浦港・城ヶ島一周チャレンジ" maxlength="80">
+          <label class="field-label" for="routeName">コース名</label><input id="routeName" value="三崎港・宮川北側まち歩きチャレンジ" maxlength="80">
           <div class="location-fields" id="locationFields"></div>
           <datalist id="placeList"></datalist>
           <button class="text-button" id="addVia" type="button">＋ 経由地を追加</button>
           <button class="text-button checkpoint-add" id="addCheckpoint" type="button">⚑ チェックポイントを追加</button>
           <p class="checkpoint-hint">神社などをCPに指定してミッションを入力すると、その場所を通る経路とミッション付きのコマ地図を作ります。</p>
-          <label class="field-label" for="frameMode">交差点の表示</label><select id="frameMode"><option value="all">全交差点（絞らない）</option><option value="reduced" selected>道なりを省略（チャレンジ）</option></select><p id="frameSummary" class="small-muted" role="status"></p><div class="generation-rule">道なりと明確に判定できる交差点を省略します。曲がる地点、判断が難しい地点、CPと手動追記のあるコマは残します。<br>全交差点に戻しても写真・追記は保持します。</div>
+          <label class="field-label" for="routeOrder">経由地の訪問順</label><select id="routeOrder"><option value="hybrid" selected>前半は近い順・後半はランダム</option><option value="input">入力した順番</option></select><p class="small-muted">出発地・ゴールは固定。経由地の前半（端数切上げ）は現在地から直線距離が近い順、残りはランダムです。「自動生成」を押すたびに後半を抽選します。表示切替・再読み込みでは抽選しません。</p><label class="field-label" for="frameMode">交差点の表示</label><select id="frameMode"><option value="all">全交差点（絞らない）</option><option value="reduced" selected>道なりを省略（チャレンジ）</option></select><p id="frameSummary" class="small-muted" role="status"></p><div class="generation-rule">道なりと明確に判定できる交差点を省略します。曲がる地点、判断が難しい地点、CPと手動追記のあるコマは残します。次のコマに似た交差点も省略しません。<br>全交差点に戻しても写真・追記は保持します。</div>
           <label class="checkbox"><input type="checkbox" id="autoLandmarks" checked>看板・三浦の特徴的な目印も自動追加</label>
           <button class="button primary generate" id="generateButton" type="submit"><span>↗</span> コマ地図を自動生成</button>
         </form>
@@ -48,7 +48,7 @@
       </section>
     </div>
     <section class="roadbook" aria-labelledby="bookTitle">
-      <div class="book-heading"><div><div class="eyebrow">02 / ROADBOOK</div><h2 id="bookTitle">コマ地図</h2><p id="bookSubtitle">進入方向は下。黒い矢印の方向へ進みます。</p></div><div class="book-tools"><label class="checkbox"><input type="checkbox" id="organizerMode" checked>作成者表示</label><button class="button" id="sampleButton">三浦港・城ヶ島一周チャレンジ</button></div></div>
+      <div class="book-heading"><div><div class="eyebrow">02 / ROADBOOK</div><h2 id="bookTitle">コマ地図</h2><p id="bookSubtitle">進入方向は下。黒い矢印の方向へ進みます。</p></div><div class="book-tools"><label class="checkbox"><input type="checkbox" id="organizerMode" checked>作成者表示</label><button class="button" id="sampleButton">三崎港・宮川北側まち歩きチャレンジ</button></div></div>
       <div id="followingRule" class="generation-rule"><strong>道なりの進み方</strong><p>コマにない交差点は道なりに進み、次のコマと交差点の形が一致したら矢印の方向へ進みます。</p><ol><li>基本的に直進</li><li>センターライン・グリーンベルトの続く方</li><li>道幅が同じ方</li><li>路面状況が同じ方（舗装から舗装など）</li><li>角度が緩い方</li><li>勾配が同じ方</li><li>Y字路では一時停止線・標識のない方</li></ol><p>自動判定できない情報もあります。作成者は全交差点版と現地を照合し、迷った場合は全交差点版で確認してください。交通規制・現地の標識を優先してください。</p></div><p id="routeEnds" class="route-ends"></p>
       <div class="metrics" id="metrics" hidden></div>
       <div id="coverageNotice" class="coverage-notice" hidden></div>
