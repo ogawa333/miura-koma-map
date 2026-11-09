@@ -64,8 +64,8 @@ test('similarity respects approach orientation and does not mirror a T',()=>{
   assert.equal(r.similarJunctions(shape([180,0,90]),shape([180,0,-90])),false);
   assert.equal(r.similarJunctions(shape([180,0,90]),shape([180,0,90],90)),false);
 });
-test('subset roads and unknown geometry are conservatively similar',()=>{
-  assert.equal(r.similarJunctions(shape([180,0,90]),shape([180,0,90,-90])),true);
+test('different road counts never match; unknown counts remain conservative',()=>{
+  assert.equal(r.similarJunctions(shape([180,0,90]),shape([180,0,90,-90])),false);
   assert.equal(r.similarJunctions({},shape([180,0,90])),true);
 });
 test('a straight omitted junction matching the next turn is restored with a reason',()=>{
@@ -99,4 +99,20 @@ test('mainland sample: both random orders connect, keep five CPs, and have no am
     }
     assert.ok(selected.length<result.frames.length);
   }
+});
+
+test('three-, four-, and five-way junctions must have matching road counts',()=>{
+  const shapes=[shape([180,0,90]),shape([180,0,90,-90]),shape([180,0,90,-90,45])];
+  for(let i=0;i<shapes.length;i++)for(let j=0;j<shapes.length;j++)assert.equal(r.similarJunctions(shapes[i],shapes[j]),i===j);
+  const missingAngle={...shapes[0],heading:undefined};
+  assert.equal(r.similarJunctions(missingAngle,shapes[1]),false);
+  assert.equal(r.similarJunctions(missingAngle,shapes[0]),true);
+});
+test('a three-way junction stays omitted before a four-way target, but not before another three-way target',()=>{
+  const start={id:'start',at:0,canOmit:false,...shape([180,-60,60])};
+  const early={id:'early',at:100,canOmit:true,...shape([180,0,90])};
+  const target={id:'target',at:200,canOmit:false,...shape([180,0,90,-90])};
+  assert.deepEqual(r.selectFrames([start,early,target],'reduced').map(f=>f.id),['start','target']);
+  assert.equal(r.selectFrames([start,early,{...target,...shape([180,0,90])}],'reduced').length,3);
+  assert.equal(r.selectFrames([start,early,target],'all').length,3);
 });
