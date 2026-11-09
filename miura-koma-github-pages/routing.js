@@ -182,9 +182,11 @@
   }
   function similarJunctions(a,b) {
     const left=junctionSignature(a),right=junctionSignature(b);
-    return similarSignatures(left,right);
+    return similarSignatures(left,right,a.branches?.length,b.branches?.length);
   }
-  function similarSignatures(a,b) {
+  function similarSignatures(a,b,aCount=a?.length,bCount=b?.length) {
+    // Road count is the primary criterion, even when angles are unavailable.
+    if(aCount!==undefined&&bCount!==undefined&&aCount!==bCount)return false;
     // Insufficient geometry is not evidence that two junctions can be distinguished.
     if(!a||!b)return true;
     const small=a.length<=b.length?a:b,big=a.length<=b.length?b:a;
@@ -198,7 +200,7 @@
       return false;
     }
     let count=0;for(let i=0;i<small.length;i++)if(assign(i,new Set()))count++;
-    // Match every branch of the smaller shape; extra roads may be hidden on site.
+    // Equal road counts are required; every branch must have an angular match.
     return count===small.length;
   }
   function selectFrames(frames, mode='all', edits={}) {
@@ -212,7 +214,7 @@
         changed=false;let previous=0;
         for(let target=1;target<frames.length;target++){
           if(!keep[target])continue;
-          for(let i=previous+1;i<target;i++)if(similarSignatures(signatures[i],signatures[target])){
+          for(let i=previous+1;i<target;i++)if(similarSignatures(signatures[i],signatures[target],frames[i].branches?.length,frames[target].branches?.length)){
             keep[i]=true;reasons.set(i,`後続の「${frames[target].label||'表示'}」地点と形が似ているため表示`);changed=true;break;
           }
           if(changed)break;
