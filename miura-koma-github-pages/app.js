@@ -34,8 +34,9 @@
     // The local OSM dataset lists the Suwa shrine under the shorter name 諏訪神社.
     const suwa=searchPlaces.find(p=>p.id==='w395998661');
     const kannon=searchPlaces.find(p=>p.id==='n3988006045');
-    if(!suwa||!kannon)throw new Error('追加の経由地点が見つかりません。同梱データを確認してください。');
-    const additions=[{...suwa,name:'向ヶ崎諏訪神社'},kannon].map(p=>({name:p.name,lat:p.lat,lon:p.lon}));
+    const park=searchPlaces.find(p=>p.id==='w395998645');
+    if(!suwa||!kannon||!park)throw new Error('追加の経由地点が見つかりません。同梱データを確認してください。');
+    const additions=[{...suwa,name:'向ヶ崎諏訪神社'},kannon,park].map(p=>({name:p.name,lat:p.lat,lon:p.lon}));
     const start={name:first.name,lat:first.lat,lon:first.lon};
     return ENGINE.orderWaypoints([start,...checkpoints,...additions,{...start,name:first.name+'（ゴール）'}]);
   }
